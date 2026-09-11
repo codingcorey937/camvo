@@ -1,0 +1,13 @@
+{
+  "name": "camvo",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "backend": "npm run dev -w packages/backend",
+    "mobile": "npx expo start --workspace packages/mobile",
+    "build:backend": "npm run build -w packages/backend",
+    "lint": "npm run lint -w packages/backend"
+  }
+}

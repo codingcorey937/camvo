@@ -1,0 +1,46 @@
+{
+  "expo": {
+    "name": "Camvo",
+    "slug": "camvo",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "scheme": "camvo",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.camvo.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Camera is needed for video calls",
+        "NSMicrophoneUsageDescription": "Microphone is needed for video calls"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0a0a0a",
+        "foregroundImage": "./assets/android-icon-foreground.png"
+      },
+      "package": "com.camvo.app",
+      "permissions": ["CAMERA", "RECORD_AUDIO"]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-status-bar",
+      [
+        "react-native-daily-js",
+        {
+          "ios": { "enableScreenShareButton": true },
+          "android": { "enableScreenShareButton": true }
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "camvo"
+      }
+    }
+  }
+}
