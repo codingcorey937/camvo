@@ -4,7 +4,8 @@ import {
   StyleSheet, Alert, ActivityIndicator,
 } from 'react-native'
 import { useAuth } from '../context/AuthContext'
-import { users as usersApi, bookings as bookingsApi } from '../services/api'
+import { users as usersApi, bookings as bookingsApi, payments as paymentsApi } from '../services/api'
+import { initPaymentSheet, presentPaymentSheet } from '@stripe/stripe-react-native'
 
 interface Creator {
   id: string
@@ -60,10 +61,11 @@ export default function CreatorDetailScreen({ route, navigation }: any) {
 
     setBooking(true)
     try {
-      const startTime = new Date(Date.now() + 60000).toISOString() // 1 min from now
+      const startTime = new Date(Date.now() + 60000).toISOString()
       const priceCents = calculatePrice()
 
-      const result = await bookingsApi.create(token!, {
+      // Step 1: Create booking → gets PaymentIntent client_secret + bookingId
+      const bookingResult = await bookingsApi.create(token!, {
         creatorId: creator.id,
         startTime,
         durationMinutes: parseInt(duration) || 30,
@@ -71,14 +73,38 @@ export default function CreatorDetailScreen({ route, navigation }: any) {
         viewerPhone: phone,
       })
 
-      // In a real app, you'd use Stripe Payment Sheet here
-      // For now, simulate confirm
+      // Step 2: Get PaymentSheet params (ephemeral key, customer)
+      const sheetResult = await paymentsApi.getPaymentSheet(token!, bookingResult.bookingId)
+
+      // Step 3: Initialise Stripe Payment Sheet
+      const { error: initError } = await initPaymentSheet({
+        paymentIntentClientSecret: bookingResult.clientSecret,
+        customerId: sheetResult.customer,
+        customerEphemeralKeySecret: sheetResult.ephemeralKey,
+        merchantDisplayName: 'Camvo',
+        returnURL: 'camvo://stripe-redirect',
+      })
+
+      if (initError) {
+        Alert.alert('Error', 'Failed to initialise payment: ' + initError.message)
+        return
+      }
+
+      // Step 4: Present the native Payment Sheet
+      const { error: presentError } = await presentPaymentSheet()
+
+      if (presentError) {
+        Alert.alert('Payment failed', presentError.message)
+        return
+      }
+
+      // Step 5: Payment succeeded — confirm the booking
+      await bookingsApi.confirm(token!, bookingResult.bookingId, sheetResult.paymentIntentId)
+
       Alert.alert(
-        'Booking Created',
-        `Payment intent created. Client secret: ${result.clientSecret?.slice(0, 20)}...\nRoom: ${result.roomUrl}\n\nIn production, Stripe Payment Sheet handles the card entry.`,
-        [
-          { text: 'OK', onPress: () => navigation.navigate('Browse') },
-        ]
+        'Booked!',
+        `Your call with ${creator.display_name || creator.users.full_name} is confirmed. Check your phone for the join link.`,
+        [{ text: 'OK', onPress: () => navigation.navigate('Browse') }]
       )
     } catch (e: any) {
       Alert.alert('Booking failed', e.message || 'Something went wrong')
@@ -116,7 +142,7 @@ export default function CreatorDetailScreen({ route, navigation }: any) {
         <Text style={styles.name}>{creator.display_name || creator.users.full_name}</Text>
         <Text style={styles.bio}>{creator.bio || 'No bio'}</Text>
         <View style={styles.tagRow}>
-          {(creator.tags || []).map((tag) => (
+          {(creator.tags || []).map((tag: string) => (
             <View key={tag} style={styles.tag}>
               <Text style={styles.tagText}>{tag}</Text>
             </View>
@@ -140,14 +166,6 @@ export default function CreatorDetailScreen({ route, navigation }: any) {
               </Text>
             </TouchableOpacity>
           ))}
-          <TextInput
-            style={[styles.durationInput, duration === 'custom' && styles.durationBtnActive]}
-            placeholder="Custom"
-            placeholderTextColor="#666"
-            keyboardType="numeric"
-            value={duration === 'custom' ? '' : undefined}
-            onChangeText={(v) => setDuration(v || 'custom')}
-          />
         </View>
 
         <Text style={styles.priceLabel}>
@@ -175,151 +193,49 @@ export default function CreatorDetailScreen({ route, navigation }: any) {
             <Text style={styles.bookButtonText}>Book & Pay ${(price / 100).toFixed(2)}</Text>
           )}
         </TouchableOpacity>
+
+        <Text style={styles.disclaimer}>
+          You'll be charged ${(price / 100).toFixed(2)}. Your card is processed securely by Stripe.
+        </Text>
       </View>
     </ScrollView>
   )
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0a0a0a',
-  },
-  profileHeader: {
-    alignItems: 'center',
-    padding: 24,
-  },
+  container: { flex: 1, backgroundColor: '#0a0a0a' },
+  profileHeader: { alignItems: 'center', padding: 24 },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#6C5CE7',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
+    width: 80, height: 80, borderRadius: 40,
+    backgroundColor: '#6C5CE7', justifyContent: 'center', alignItems: 'center', marginBottom: 12,
   },
-  avatarText: {
-    color: '#fff',
-    fontSize: 36,
-    fontWeight: '700',
-  },
-  name: {
-    color: '#fff',
-    fontSize: 24,
-    fontWeight: '800',
-    marginBottom: 4,
-  },
-  bio: {
-    color: '#888',
-    fontSize: 14,
-    textAlign: 'center',
-    paddingHorizontal: 24,
-  },
-  tagRow: {
-    flexDirection: 'row',
-    marginTop: 12,
-    gap: 6,
-  },
-  tag: {
-    backgroundColor: '#2a2a2a',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  tagText: {
-    color: '#aaa',
-    fontSize: 12,
-  },
-  bookingSection: {
-    padding: 24,
-    borderTopWidth: 1,
-    borderTopColor: '#222',
-  },
-  sectionTitle: {
-    color: '#fff',
-    fontSize: 22,
-    fontWeight: '700',
-    marginBottom: 20,
-  },
-  label: {
-    color: '#aaa',
-    fontSize: 14,
-    marginBottom: 8,
-  },
-  durationRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 16,
-  },
+  avatarText: { color: '#fff', fontSize: 36, fontWeight: '700' },
+  name: { color: '#fff', fontSize: 24, fontWeight: '800', marginBottom: 4 },
+  bio: { color: '#888', fontSize: 14, textAlign: 'center', paddingHorizontal: 24 },
+  tagRow: { flexDirection: 'row', marginTop: 12, gap: 6 },
+  tag: { backgroundColor: '#2a2a2a', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
+  tagText: { color: '#aaa', fontSize: 12 },
+  bookingSection: { padding: 24, borderTopWidth: 1, borderTopColor: '#222' },
+  sectionTitle: { color: '#fff', fontSize: 22, fontWeight: '700', marginBottom: 20 },
+  label: { color: '#aaa', fontSize: 14, marginBottom: 8 },
+  durationRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
   durationBtn: {
-    backgroundColor: '#1a1a1a',
-    borderRadius: 10,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: '#333',
+    backgroundColor: '#1a1a1a', borderRadius: 10,
+    paddingHorizontal: 20, paddingVertical: 12,
+    borderWidth: 1, borderColor: '#333',
   },
-  durationBtnActive: {
-    borderColor: '#6C5CE7',
-    backgroundColor: '#2a1f5e',
-  },
-  durationText: {
-    color: '#888',
-    fontSize: 16,
-  },
-  durationTextActive: {
-    color: '#6C5CE7',
-    fontWeight: '700',
-  },
-  durationInput: {
-    backgroundColor: '#1a1a1a',
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    color: '#fff',
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#333',
-    flex: 1,
-  },
-  priceLabel: {
-    color: '#888',
-    fontSize: 18,
-    marginBottom: 20,
-  },
-  priceValue: {
-    color: '#6C5CE7',
-    fontWeight: '800',
-    fontSize: 22,
-  },
+  durationBtnActive: { borderColor: '#6C5CE7', backgroundColor: '#2a1f5e' },
+  durationText: { color: '#888', fontSize: 16 },
+  durationTextActive: { color: '#6C5CE7', fontWeight: '700' },
+  priceLabel: { color: '#888', fontSize: 18, marginBottom: 20 },
+  priceValue: { color: '#6C5CE7', fontWeight: '800', fontSize: 22 },
   input: {
-    backgroundColor: '#1a1a1a',
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: '#fff',
-    borderWidth: 1,
-    borderColor: '#333',
-    marginBottom: 20,
+    backgroundColor: '#1a1a1a', borderRadius: 12, padding: 16,
+    fontSize: 16, color: '#fff', borderWidth: 1, borderColor: '#333', marginBottom: 20,
   },
-  bookButton: {
-    backgroundColor: '#6C5CE7',
-    borderRadius: 12,
-    padding: 18,
-    alignItems: 'center',
-  },
-  bookButtonDisabled: {
-    opacity: 0.6,
-  },
-  bookButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  errorText: {
-    color: '#888',
-    textAlign: 'center',
-    marginTop: 40,
-    fontSize: 16,
-  },
+  bookButton: { backgroundColor: '#6C5CE7', borderRadius: 12, padding: 18, alignItems: 'center' },
+  bookButtonDisabled: { opacity: 0.6 },
+  bookButtonText: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  errorText: { color: '#888', textAlign: 'center', marginTop: 40, fontSize: 16 },
+  disclaimer: { color: '#555', fontSize: 12, textAlign: 'center', marginTop: 12 },
 })

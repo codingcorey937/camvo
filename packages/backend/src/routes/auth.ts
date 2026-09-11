@@ -3,6 +3,7 @@ import { supabase } from '../utils/supabase'
 import { generateToken } from '../middleware/auth'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
+import { createCustomer } from '../services/stripe'
 
 const router = Router()
 
@@ -37,6 +38,17 @@ router.post('/signup', async (req: Request, res: Response) => {
 
     const hashedPassword = await bcrypt.hash(data.password, 10)
 
+    // Create Stripe customer for Payment Sheet
+    let stripeCustomerId: string | null = null
+    if (process.env.STRIPE_SECRET_KEY) {
+      try {
+        const customer = await createCustomer(data.email, data.fullName)
+        stripeCustomerId = customer.id
+      } catch (stripeErr) {
+        console.error('Stripe customer creation failed (non-fatal):', stripeErr)
+      }
+    }
+
     const { data: user, error } = await supabase
       .from('users')
       .insert({
@@ -44,8 +56,9 @@ router.post('/signup', async (req: Request, res: Response) => {
         password_hash: hashedPassword,
         full_name: data.fullName,
         phone: data.phone || null,
+        stripe_customer_id: stripeCustomerId,
       })
-      .select('id, email, full_name, phone')
+      .select('id, email, full_name, phone, stripe_customer_id')
       .single()
 
     if (error || !user) {
@@ -55,7 +68,7 @@ router.post('/signup', async (req: Request, res: Response) => {
 
     const token = generateToken({ userId: user.id, email: user.email })
 
-    res.status(201).json({ user, token })
+    res.status(201).json({ user, token, stripeCustomerId })
   } catch (err) {
     if (err instanceof z.ZodError) {
       res.status(400).json({ error: 'Validation error', details: err.errors })

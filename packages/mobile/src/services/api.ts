@@ -56,3 +56,8 @@ export const bookings = {
   getMy: (token: string) => apiRequest('/api/bookings/my', { method: 'GET', token }),
   getHost: (token: string) => apiRequest('/api/bookings/host', { method: 'GET', token }),
 }
+
+export const payments = {
+  getPaymentSheet: (token: string, bookingId: string) =>
+    apiRequest('/api/payments/payment-sheet', { token, body: { bookingId } }),
+}

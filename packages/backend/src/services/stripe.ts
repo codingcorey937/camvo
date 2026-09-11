@@ -8,11 +8,12 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder'
   apiVersion: '2025-02-24' as any,
 })
 
-export async function createPaymentIntent(amount: number, currency: string, metadata: Record<string, string>) {
+export async function createPaymentIntent(amount: number, currency: string, metadata: Record<string, string>, customerId?: string) {
   return stripe.paymentIntents.create({
-    amount,     // cents
+    amount,
     currency,
     metadata,
+    customer: customerId,
     automatic_payment_methods: { enabled: true },
   })
 }
@@ -20,6 +21,20 @@ export async function createPaymentIntent(amount: number, currency: string, meta
 export async function constructWebhookEvent(payload: Buffer, signature: string) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET!
   return stripe.webhooks.constructEvent(payload, signature, secret)
+}
+
+export async function createCustomer(email: string, fullName: string): Promise<Stripe.Customer> {
+  return stripe.customers.create({
+    email,
+    name: fullName,
+    metadata: { source: 'camvo' },
+  })
+}
+
+export async function createEphemeralKey(customerId: string): Promise<Stripe.EphemeralKey> {
+  return stripe.ephemeralKeys.create(
+    { customer: customerId },
+  ) as Promise<Stripe.EphemeralKey>
 }
 
 export async function createAccountLink(accountId: string, refreshUrl: string, returnUrl: string) {
@@ -45,6 +60,10 @@ export async function transferToCreator(amount: number, destinationStripeAccount
     currency: 'usd',
     destination: destinationStripeAccountId,
   })
+}
+
+export async function confirmPaymentIntent(paymentIntentId: string): Promise<Stripe.PaymentIntent> {
+  return stripe.paymentIntents.retrieve(paymentIntentId)
 }
 
 export default stripe

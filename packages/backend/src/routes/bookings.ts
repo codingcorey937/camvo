@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express'
 import { supabase } from '../utils/supabase'
 import { authMiddleware } from '../middleware/auth'
 import { createRoom } from '../services/daily'
-import { createPaymentIntent } from '../services/stripe'
+import { createPaymentIntent, confirmPaymentIntent } from '../services/stripe'
 import { sendJoinLink, sendBookingConfirmation } from '../services/twilio'
 import { z } from 'zod'
 import { v4 as uuid } from 'uuid'
@@ -93,47 +93,48 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
   }
 })
 
-// POST /api/bookings/confirm — Stripe webhook calls this or frontend after payment
+// POST /api/bookings/confirm — confirm after payment
 router.post('/confirm', async (req: Request, res: Response) => {
   const { bookingId, paymentIntentId } = req.body
 
-  // Verify payment intent status
-  const { default: Stripe } = await import('stripe')
-  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', { apiVersion: '2025-02-24' as any })
-
-  const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId)
-  if (paymentIntent.status !== 'succeeded') {
-    res.status(400).json({ error: 'Payment not completed' })
-    return
-  }
-
-  // Update booking
-  const { data: booking, error } = await supabase
-    .from('bookings')
-    .update({ status: 'confirmed' })
-    .eq('id', bookingId)
-    .select('*')
-    .single()
-
-  if (error || !booking) {
-    res.status(500).json({ error: 'Failed to confirm booking' })
-    return
-  }
-
-  // Send SMS
   try {
-    await sendJoinLink(booking.viewer_phone, booking.room_url, booking.creator_name)
-    await sendBookingConfirmation(
-      booking.viewer_phone,
-      booking.room_url,
-      booking.creator_name,
-      new Date(booking.start_time).toLocaleString()
-    )
-  } catch (smsErr) {
-    console.error('SMS send error (non-fatal):', smsErr)
-  }
+    const paymentIntent = await confirmPaymentIntent(paymentIntentId)
+    if (paymentIntent.status !== 'succeeded') {
+      res.status(400).json({ error: 'Payment not completed' })
+      return
+    }
 
-  res.json({ booking, message: 'Booking confirmed! Check your phone for the join link.' })
+    // Update booking
+    const { data: booking, error } = await supabase
+      .from('bookings')
+      .update({ status: 'confirmed' })
+      .eq('id', bookingId)
+      .select('*')
+      .single()
+
+    if (error || !booking) {
+      res.status(500).json({ error: 'Failed to confirm booking' })
+      return
+    }
+
+    // Send SMS
+    try {
+      await sendJoinLink(booking.viewer_phone, booking.room_url, booking.creator_name)
+      await sendBookingConfirmation(
+        booking.viewer_phone,
+        booking.room_url,
+        booking.creator_name,
+        new Date(booking.start_time).toLocaleString()
+      )
+    } catch (smsErr) {
+      console.error('SMS send error (non-fatal):', smsErr)
+    }
+
+    res.json({ booking, message: 'Booking confirmed! Check your phone for the join link.' })
+  } catch (err) {
+    console.error('Confirm booking error:', err)
+    res.status(500).json({ error: 'Failed to confirm booking' })
+  }
 })
 
 // GET /api/bookings/my — viewer's bookings
