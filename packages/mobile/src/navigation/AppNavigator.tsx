@@ -9,6 +9,7 @@ import CreatorDetailScreen from '../screens/CreatorDetailScreen'
 import ProfileScreen from '../screens/ProfileScreen'
 import MyBookingsScreen from '../screens/MyBookingsScreen'
 import HostBookingsScreen from '../screens/HostBookingsScreen'
+import CallScreen from '../screens/CallScreen'
 import { ActivityIndicator, View } from 'react-native'
 
 type AuthStackParamList = {
@@ -22,6 +23,7 @@ type AppStackParamList = {
   Profile: undefined
   MyBookings: undefined
   HostBookings: undefined
+  Call: { roomUrl: string; creatorName: string; bookingId: string }
 }
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>()
@@ -72,6 +74,7 @@ export default function AppNavigator() {
           <AppStack.Screen name="Profile" component={ProfileScreen} />
           <AppStack.Screen name="MyBookings" component={MyBookingsScreen} />
           <AppStack.Screen name="HostBookings" component={HostBookingsScreen} />
+          <AppStack.Screen name="Call" component={CallScreen} />
         </AppStack.Navigator>
       )}
     </NavigationContainer>

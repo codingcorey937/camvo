@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { View, Text, FlatList, StyleSheet, ActivityIndicator } from 'react-native'
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native'
 import { useAuth } from '../context/AuthContext'
 import { bookings as bookingsApi } from '../services/api'
 
@@ -14,7 +14,7 @@ interface Booking {
   viewer_phone: string
 }
 
-export default function HostBookingsScreen() {
+export default function HostBookingsScreen({ navigation }: any) {
   const { token } = useAuth()
   const [bookings, setBookings] = useState<Booking[]>([])
   const [loading, setLoading] = useState(true)
@@ -66,9 +66,18 @@ export default function HostBookingsScreen() {
                 {new Date(item.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </Text>
               <Text style={styles.detail}>{item.duration_minutes} min — ${(item.price_cents / 100).toFixed(2)}</Text>
-              <Text style={styles.detail}>Viewer phone: {item.viewer_phone}</Text>
+              <Text style={styles.detail}>Viewer: {item.viewer_phone}</Text>
               {item.status === 'confirmed' && (
-                <Text style={styles.joinLink}>Join: {item.room_url}</Text>
+                <TouchableOpacity
+                  style={styles.joinButton}
+                  onPress={() => navigation.navigate('Call', {
+                    roomUrl: item.room_url,
+                    creatorName: 'your viewer',
+                    bookingId: item.id,
+                  })}
+                >
+                  <Text style={styles.joinButtonText}>Join Call</Text>
+                </TouchableOpacity>
               )}
             </View>
           )
@@ -99,6 +108,13 @@ const styles = StyleSheet.create({
   creatorName: { color: '#fff', fontSize: 18, fontWeight: '700' },
   status: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase' },
   detail: { color: '#888', fontSize: 14, marginTop: 2 },
-  joinLink: { color: '#6C5CE7', fontSize: 13, marginTop: 6 },
+  joinButton: {
+    backgroundColor: '#10b981',
+    borderRadius: 10,
+    padding: 12,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  joinButtonText: { color: '#fff', fontSize: 14, fontWeight: '700' },
   empty: { color: '#666', textAlign: 'center', marginTop: 40, fontSize: 16 },
 })
