@@ -7,6 +7,8 @@ import { useAuth } from '../context/AuthContext'
 import { users as usersApi, bookings as bookingsApi, payments as paymentsApi } from '../services/api'
 import { initPaymentSheet, presentPaymentSheet } from '@stripe/stripe-react-native'
 
+const PLATFORM_FEE_RATE = 0.125
+
 interface Creator {
   id: string
   display_name: string
@@ -130,6 +132,8 @@ export default function CreatorDetailScreen({ route, navigation }: any) {
   }
 
   const price = calculatePrice()
+  const platformFee = Math.ceil(price * PLATFORM_FEE_RATE)
+  const total = price + platformFee
 
   return (
     <ScrollView style={styles.container}>
@@ -168,9 +172,17 @@ export default function CreatorDetailScreen({ route, navigation }: any) {
           ))}
         </View>
 
-        <Text style={styles.priceLabel}>
-          Total: <Text style={styles.priceValue}>${(price / 100).toFixed(2)}</Text>
-        </Text>
+        <View style={styles.priceBreakdown}>
+          <Text style={styles.priceRow}>
+            Creator price: <Text style={styles.priceValue}>${(price / 100).toFixed(2)}</Text>
+          </Text>
+          <Text style={styles.priceRow}>
+            Platform fee (12.5%): <Text style={styles.feeValue}>${(platformFee / 100).toFixed(2)}</Text>
+          </Text>
+          <Text style={styles.totalRow}>
+            Total: <Text style={styles.totalValue}>${(total / 100).toFixed(2)}</Text>
+          </Text>
+        </View>
 
         <Text style={styles.label}>Your Phone (for join link)</Text>
         <TextInput
@@ -190,7 +202,7 @@ export default function CreatorDetailScreen({ route, navigation }: any) {
           {booking ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.bookButtonText}>Book & Pay ${(price / 100).toFixed(2)}</Text>
+            <Text style={styles.bookButtonText}>Book & Pay ${(total / 100).toFixed(2)}</Text>
           )}
         </TouchableOpacity>
 
@@ -229,6 +241,11 @@ const styles = StyleSheet.create({
   durationTextActive: { color: '#6C5CE7', fontWeight: '700' },
   priceLabel: { color: '#888', fontSize: 18, marginBottom: 20 },
   priceValue: { color: '#6C5CE7', fontWeight: '800', fontSize: 22 },
+  priceBreakdown: { backgroundColor: '#151515', borderRadius: 12, padding: 14, marginBottom: 16 },
+  priceRow: { color: '#aaa', fontSize: 14, marginBottom: 4 },
+  feeValue: { color: '#f59e0b', fontWeight: '600' },
+  totalRow: { color: '#fff', fontSize: 16, marginTop: 6, borderTopWidth: 1, borderTopColor: '#333', paddingTop: 6 },
+  totalValue: { color: '#6C5CE7', fontWeight: '800', fontSize: 20 },
   input: {
     backgroundColor: '#1a1a1a', borderRadius: 12, padding: 16,
     fontSize: 16, color: '#fff', borderWidth: 1, borderColor: '#333', marginBottom: 20,

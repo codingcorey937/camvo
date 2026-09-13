@@ -2,12 +2,13 @@ import { Router, Request, Response } from 'express'
 import { supabase } from '../utils/supabase'
 import { authMiddleware } from '../middleware/auth'
 import { createRoom } from '../services/daily'
-import { createPaymentIntent, confirmPaymentIntent } from '../services/stripe'
+import { createPaymentIntent, confirmPaymentIntent, transferToCreator } from '../services/stripe'
 import { sendJoinLink, sendBookingConfirmation } from '../services/twilio'
 import { z } from 'zod'
 import { v4 as uuid } from 'uuid'
 
 const router = Router()
+const PLATFORM_FEE_RATE = 0.125 // 12.5%
 
 const createBookingSchema = z.object({
   creatorId: z.string().uuid(),
@@ -34,20 +35,31 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
       return
     }
 
+    // Calculate fees
+    const platformFeeCents = Math.ceil(data.priceCents * PLATFORM_FEE_RATE)
+    const totalCents = data.priceCents + platformFeeCents
+
     // Create Daily.co room
     const room = await createRoom({
-      nbf: Math.floor(new Date(data.startTime).getTime() / 1000) - 300, // 5 min before
+      nbf: Math.floor(new Date(data.startTime).getTime() / 1000) - 300,
       exp: Math.floor(new Date(data.startTime).getTime() / 1000) + data.durationMinutes * 60 + 300,
     })
 
-    // Create payment intent
-    const paymentIntent = await createPaymentIntent(data.priceCents, 'usd', {
+    // Get viewer's Stripe customer ID
+    const { data: viewer } = await supabase
+      .from('users')
+      .select('stripe_customer_id')
+      .eq('id', req.user!.userId)
+      .single()
+
+    // Create payment intent for total (price + platform fee)
+    const paymentIntent = await createPaymentIntent(totalCents, 'usd', {
       bookingId: 'pending',
       creatorId: data.creatorId,
       viewerId: req.user!.userId,
-    })
+    }, viewer?.stripe_customer_id || undefined)
 
-    // Create booking record (pending payment)
+    // Create booking record
     const bookingId = uuid()
     const { error: bookingErr } = await supabase
       .from('bookings')
@@ -58,6 +70,8 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
         start_time: data.startTime,
         duration_minutes: data.durationMinutes,
         price_cents: data.priceCents,
+        platform_fee_cents: platformFeeCents,
+        creator_payout_cents: data.priceCents,
         currency: 'usd',
         room_name: room.name,
         room_url: room.url,
@@ -77,7 +91,9 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
       bookingId,
       clientSecret: paymentIntent.client_secret,
       roomUrl: room.url,
-      amount: data.priceCents,
+      priceCents: data.priceCents,
+      platformFeeCents,
+      totalCents,
     })
   } catch (err) {
     if (err instanceof z.ZodError) {
@@ -104,17 +120,29 @@ router.post('/confirm', async (req: Request, res: Response) => {
       return
     }
 
-    // Update booking
+    // Update booking to confirmed
     const { data: booking, error } = await supabase
       .from('bookings')
       .update({ status: 'confirmed' })
       .eq('id', bookingId)
-      .select('*')
+      .select('*, creators!inner(stripe_connect_account_id)')
       .single()
 
     if (error || !booking) {
       res.status(500).json({ error: 'Failed to confirm booking' })
       return
+    }
+
+    // Payout to creator via Stripe Connect (if they have an account linked)
+    const connectAccountId = (booking as any).creators?.stripe_connect_account_id
+    if (connectAccountId && booking.creator_payout_cents > 0) {
+      try {
+        await transferToCreator(booking.creator_payout_cents, connectAccountId)
+        console.log(`💰 Transferred ${booking.creator_payout_cents}c to creator ${booking.creator_id}`)
+      } catch (transferErr) {
+        console.error('Stripe transfer failed:', transferErr)
+        // Non-fatal — booking is still confirmed
+      }
     }
 
     // Send SMS
@@ -130,7 +158,12 @@ router.post('/confirm', async (req: Request, res: Response) => {
       console.error('SMS send error (non-fatal):', smsErr)
     }
 
-    res.json({ booking, message: 'Booking confirmed! Check your phone for the join link.' })
+    res.json({
+      booking,
+      message: 'Booking confirmed! Check your phone for the join link.',
+      platformFeeCents: booking.platform_fee_cents,
+      creatorPayoutCents: booking.creator_payout_cents,
+    })
   } catch (err) {
     console.error('Confirm booking error:', err)
     res.status(500).json({ error: 'Failed to confirm booking' })

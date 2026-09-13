@@ -46,6 +46,8 @@ CREATE TABLE IF NOT EXISTS bookings (
   stripe_payment_intent_id TEXT,
   viewer_phone TEXT NOT NULL,
   creator_name TEXT NOT NULL,
+  platform_fee_cents INTEGER NOT NULL DEFAULT 0,
+  creator_payout_cents INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
