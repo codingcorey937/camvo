@@ -39,14 +39,22 @@ app.get('/api/config/public', (_req, res) => {
 })
 
 // Serve web app static build (skip gracefully if dist doesn't exist yet)
-const webDist = path.join(__dirname, '..', 'web', 'dist')
-if (fs.existsSync(webDist)) {
+// Check multiple possible locations
+const possibleDists = [
+  path.join(__dirname, '..', 'web', 'dist'),
+  '/home/agentadmin/camvo/packages/web/dist',
+]
+const webDist = possibleDists.find(d => fs.existsSync(d))
+if (webDist) {
+  console.log(`🌐 Serving web app from ${webDist}`)
   app.use(express.static(webDist))
 
   // SPA fallback — serve index.html for any non-API route
   app.get('*', (_req, res) => {
     res.sendFile(path.join(webDist, 'index.html'))
   })
+} else {
+  console.log('⚠️  Web dist not found — API-only mode')
 }
 
 // Error handler
