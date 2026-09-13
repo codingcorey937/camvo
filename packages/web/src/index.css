@@ -25,6 +25,6 @@
     @apply bg-dark-800 rounded-2xl p-6 border border-dark-600 hover:border-dark-500 transition-all;
   }
   .gradient-text {
-    @apply bg-gradient-to-r from-primary to-purple-400 bg-clip-text text-transparent;
+    @apply bg-gradient-to-r from-primary to-red-400 bg-clip-text text-transparent;
   }
 }
