@@ -50,7 +50,7 @@ if (webDist) {
   app.use(express.static(webDist))
 
   // SPA fallback — serve index.html for any non-API route
-  app.get('*', (_req, res) => {
+  app.get('/{*path}', (_req, res) => {
     res.sendFile(path.join(webDist, 'index.html'))
   })
 } else {
