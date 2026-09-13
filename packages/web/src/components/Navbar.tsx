@@ -20,28 +20,19 @@ export function Navbar() {
           </Link>
 
           <div className="flex items-center gap-4">
-            <Link to="/browse" className="text-dark-200 hover:text-white transition-colors text-sm font-medium">
-              Browse
-            </Link>
             {user ? (
               <>
-                <Link to="/bookings" className="text-dark-200 hover:text-white transition-colors text-sm font-medium">
-                  My Bookings
+                <Link to="/creator/dashboard" className="text-dark-200 hover:text-white transition-colors text-sm font-medium">
+                  Dashboard
                 </Link>
-                <span className="text-dark-400 text-sm">{user.fullName}</span>
                 <button onClick={handleLogout} className="btn-secondary text-sm py-2 px-4">
                   Log Out
                 </button>
               </>
             ) : (
-              <>
-                <Link to="/login" className="text-dark-200 hover:text-white transition-colors text-sm font-medium">
-                  Log In
-                </Link>
-                <Link to="/signup" className="btn-primary text-sm py-2 px-4">
-                  Sign Up
-                </Link>
-              </>
+              <Link to="/creator/login" className="btn-primary text-sm py-2 px-4">
+                Creator Login
+              </Link>
             )}
           </div>
         </div>

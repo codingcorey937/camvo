@@ -18,6 +18,118 @@ const createBookingSchema = z.object({
   viewerPhone: z.string().min(5),
 })
 
+// POST /api/bookings/guest — create a booking without auth (for clients using creator link)
+const guestBookingSchema = z.object({
+  creatorId: z.string().uuid(),
+  startTime: z.string().datetime(),
+  durationMinutes: z.number().min(5).max(480),
+  priceCents: z.number().min(0),
+  viewerName: z.string().min(1),
+  viewerPhone: z.string().min(5),
+  viewerEmail: z.string().email(),
+})
+
+router.post('/guest', async (req: Request, res: Response) => {
+  try {
+    const data = guestBookingSchema.parse(req.body)
+
+    // Get creator info
+    const { data: creator, error: creatorErr } = await supabase
+      .from('creators')
+      .select('*, users!inner(id, full_name)')
+      .eq('id', data.creatorId)
+      .single()
+
+    if (creatorErr || !creator) {
+      res.status(404).json({ error: 'Creator not found' })
+      return
+    }
+
+    // Calculate fees
+    const platformFeeCents = Math.ceil(data.priceCents * PLATFORM_FEE_RATE)
+    const creatorPayoutCents = data.priceCents - platformFeeCents
+
+    // Create Daily.co room
+    const room = await createRoom({
+      nbf: Math.floor(new Date(data.startTime).getTime() / 1000) - 300,
+      exp: Math.floor(new Date(data.startTime).getTime() / 1000) + data.durationMinutes * 60 + 300,
+    })
+
+    // Create a lightweight guest user
+    const guestId = uuid()
+    const { error: guestErr } = await supabase
+      .from('users')
+      .insert({
+        id: guestId,
+        email: data.viewerEmail,
+        full_name: data.viewerName,
+        phone: data.viewerPhone,
+        password_hash: uuid(), // random hash — guest never logs in
+      })
+
+    if (guestErr) {
+      console.error('Failed to create guest user:', guestErr)
+      res.status(500).json({ error: 'Failed to create booking' })
+      return
+    }
+
+    // Create payment intent
+    const paymentIntent = await createPaymentIntent(data.priceCents, 'usd', {
+      bookingId: 'pending',
+      creatorId: data.creatorId,
+      viewerName: data.viewerName,
+    })
+
+    // Create booking record
+    const bookingId = uuid()
+    const { error: bookingErr } = await supabase
+      .from('bookings')
+      .insert({
+        id: bookingId,
+        creator_id: data.creatorId,
+        viewer_id: guestId,
+        start_time: data.startTime,
+        duration_minutes: data.durationMinutes,
+        price_cents: data.priceCents,
+        platform_fee_cents: platformFeeCents,
+        creator_payout_cents: creatorPayoutCents,
+        currency: 'usd',
+        room_name: room.name,
+        room_url: room.url,
+        stripe_payment_intent_id: paymentIntent.id,
+        status: 'pending_payment',
+        viewer_phone: data.viewerPhone,
+        creator_name: creator.users?.full_name || 'Creator',
+      })
+
+    if (bookingErr) {
+      console.error('Failed to create booking:', bookingErr)
+      res.status(500).json({ error: 'Failed to create booking' })
+      return
+    }
+
+    res.status(201).json({
+      bookingId,
+      clientSecret: paymentIntent.client_secret,
+      roomUrl: room.url,
+      priceCents: data.priceCents,
+      platformFeeCents,
+      creatorPayoutCents,
+    })
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      res.status(400).json({ error: 'Validation error', details: err.errors })
+      return
+    }
+    if (err instanceof Error && err.message.includes('Daily.co')) {
+      res.status(502).json({ error: 'Failed to create video room' })
+      return
+    }
+    console.error('Guest booking error:', err)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
 // POST /api/bookings — create a booking (requires auth)
 router.post('/', authMiddleware, async (req: Request, res: Response) => {
   try {

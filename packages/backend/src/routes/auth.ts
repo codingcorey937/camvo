@@ -68,6 +68,18 @@ router.post('/signup', async (req: Request, res: Response) => {
 
     const token = generateToken({ userId: user.id, email: user.email })
 
+    // Auto-create a creator profile (all signups are creators)
+    const creatorSlug = data.fullName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+    await supabase
+      .from('creators')
+      .insert({
+        user_id: user.id,
+        display_name: data.fullName,
+        slug: creatorSlug,
+        available: true,
+      })
+      .maybeSingle()
+
     res.status(201).json({ user, token, stripeCustomerId })
   } catch (err) {
     if (err instanceof z.ZodError) {

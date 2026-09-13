@@ -49,12 +49,8 @@ export const api = {
       { token }
     ),
 
-  getCreators: (search?: string, tag?: string) => {
-    const params = new URLSearchParams()
-    if (search) params.set('search', search)
-    if (tag) params.set('tag', tag)
-    return request<{ creators: any[]; count?: number }>(`/users/creators?${params}`)
-  },
+  getCreatorBySlug: (slug: string) =>
+    request<any>(`/users/creators/by-slug/${slug}`),
 
   getCreator: (id: string) => request<any>(`/users/creators/${id}`),
 
@@ -83,8 +79,20 @@ export const api = {
       token,
     }),
 
+  createGuestBooking: (data: {
+    creatorId: string; startTime: string; durationMinutes: number;
+    priceCents: number; viewerName: string; viewerPhone: string; viewerEmail: string
+  }) =>
+    request<{
+      bookingId: string; clientSecret: string; roomUrl: string;
+      priceCents: number; platformFeeCents: number; creatorPayoutCents: number
+    }>('/bookings/guest', { method: 'POST', body: data }),
+
   getMyBookings: (token: string) =>
     request<{ bookings: any[] }>('/bookings/my', { token }),
+
+  getHostBookings: (token: string) =>
+    request<{ bookings: any[] }>('/bookings/host', { token }),
 
   // Config
   getConfig: () =>

@@ -14,6 +14,7 @@ const creatorProfileSchema = z.object({
   customPrice: z.number().min(0).optional(),
   currency: z.string().default('usd'),
   available: z.boolean().default(true),
+  slug: z.string().min(2).regex(/^[a-z0-9-]+$/).optional(),
 })
 
 // GET /api/users/me
@@ -81,6 +82,7 @@ router.put('/creator-profile', authMiddleware, async (req: Request, res: Respons
           custom_price: data.customPrice || null,
           currency: data.currency,
           available: data.available,
+          ...(data.slug ? { slug: data.slug } : {}),
         })
         .eq('user_id', req.user!.userId)
         .select('*')
@@ -97,6 +99,7 @@ router.put('/creator-profile', authMiddleware, async (req: Request, res: Respons
           price_per_hour: data.pricePerHour || null,
           custom_price: data.customPrice || null,
           currency: data.currency,
+          slug: data.slug || data.displayName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''),
         })
         .select('*')
         .single()
@@ -115,6 +118,23 @@ router.put('/creator-profile', authMiddleware, async (req: Request, res: Respons
     }
     throw err
   }
+})
+
+// GET /api/users/creators/by-slug/:slug — public creator lookup by slug
+router.get('/creators/by-slug/:slug', async (req: Request, res: Response) => {
+  const { slug } = req.params
+  const { data, error } = await supabase
+    .from('creators')
+    .select('*, users!inner(id, full_name, avatar_url)')
+    .eq('slug', slug)
+    .single()
+
+  if (error || !data) {
+    res.status(404).json({ error: 'Creator not found' })
+    return
+  }
+
+  res.json(data)
 })
 
 // GET /api/users/creators — browse all creators

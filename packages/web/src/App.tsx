@@ -2,13 +2,11 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { Navbar } from './components/Navbar'
 import { Landing } from './pages/Landing'
-import { Login } from './pages/Login'
-import { Signup } from './pages/Signup'
-import { Browse } from './pages/Browse'
-import { CreatorDetail } from './pages/CreatorDetail'
-import { MyBookings } from './pages/MyBookings'
+import { CreatorLogin } from './pages/CreatorLogin'
+import { CreatorSignup } from './pages/CreatorSignup'
+import { CreatorDashboard } from './pages/CreatorDashboard'
+import { CreatorPublicPage } from './pages/CreatorPublicPage'
 import { CallRoom } from './pages/CallRoom'
-import { ProtectedRoute } from './components/ProtectedRoute'
 
 export default function App() {
   return (
@@ -19,18 +17,11 @@ export default function App() {
           <main className="flex-1">
             <Routes>
               <Route path="/" element={<Landing />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/signup" element={<Signup />} />
-              <Route path="/browse" element={
-                <ProtectedRoute><Browse /></ProtectedRoute>
-              } />
-              <Route path="/creators/:id" element={<CreatorDetail />} />
-              <Route path="/bookings" element={
-                <ProtectedRoute><MyBookings /></ProtectedRoute>
-              } />
-              <Route path="/call/:roomName" element={
-                <ProtectedRoute><CallRoom /></ProtectedRoute>
-              } />
+              <Route path="/creator/login" element={<CreatorLogin />} />
+              <Route path="/creator/signup" element={<CreatorSignup />} />
+              <Route path="/creator/dashboard" element={<CreatorDashboard />} />
+              <Route path="/c/:slug" element={<CreatorPublicPage />} />
+              <Route path="/call/:roomName" element={<CallRoom />} />
             </Routes>
           </main>
         </div>
