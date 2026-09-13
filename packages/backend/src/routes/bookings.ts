@@ -37,7 +37,7 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
 
     // Calculate fees
     const platformFeeCents = Math.ceil(data.priceCents * PLATFORM_FEE_RATE)
-    const totalCents = data.priceCents + platformFeeCents
+    const creatorPayoutCents = data.priceCents - platformFeeCents
 
     // Create Daily.co room
     const room = await createRoom({
@@ -52,8 +52,8 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
       .eq('id', req.user!.userId)
       .single()
 
-    // Create payment intent for total (price + platform fee)
-    const paymentIntent = await createPaymentIntent(totalCents, 'usd', {
+    // Create payment intent for the listed price (viewer pays price, fee deducted from creator)
+    const paymentIntent = await createPaymentIntent(data.priceCents, 'usd', {
       bookingId: 'pending',
       creatorId: data.creatorId,
       viewerId: req.user!.userId,
@@ -71,7 +71,7 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
         duration_minutes: data.durationMinutes,
         price_cents: data.priceCents,
         platform_fee_cents: platformFeeCents,
-        creator_payout_cents: data.priceCents,
+        creator_payout_cents: creatorPayoutCents,
         currency: 'usd',
         room_name: room.name,
         room_url: room.url,
@@ -93,7 +93,7 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
       roomUrl: room.url,
       priceCents: data.priceCents,
       platformFeeCents,
-      totalCents,
+      creatorPayoutCents,
     })
   } catch (err) {
     if (err instanceof z.ZodError) {

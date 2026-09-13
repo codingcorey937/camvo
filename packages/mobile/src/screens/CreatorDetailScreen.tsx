@@ -133,7 +133,7 @@ export default function CreatorDetailScreen({ route, navigation }: any) {
 
   const price = calculatePrice()
   const platformFee = Math.ceil(price * PLATFORM_FEE_RATE)
-  const total = price + platformFee
+  const creatorPayout = price - platformFee
 
   return (
     <ScrollView style={styles.container}>
@@ -180,7 +180,7 @@ export default function CreatorDetailScreen({ route, navigation }: any) {
             Platform fee (12.5%): <Text style={styles.feeValue}>${(platformFee / 100).toFixed(2)}</Text>
           </Text>
           <Text style={styles.totalRow}>
-            Total: <Text style={styles.totalValue}>${(total / 100).toFixed(2)}</Text>
+            Total: <Text style={styles.totalValue}>${(price / 100).toFixed(2)}</Text>
           </Text>
         </View>
 
@@ -202,7 +202,7 @@ export default function CreatorDetailScreen({ route, navigation }: any) {
           {booking ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.bookButtonText}>Book & Pay ${(total / 100).toFixed(2)}</Text>
+            <Text style={styles.bookButtonText}>Book & Pay ${(price / 100).toFixed(2)}</Text>
           )}
         </TouchableOpacity>
 
