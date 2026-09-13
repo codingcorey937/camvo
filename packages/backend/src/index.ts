@@ -2,6 +2,7 @@ import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
 import path from 'path'
+import fs from 'fs'
 import authRoutes from './routes/auth'
 import userRoutes from './routes/users'
 import bookingRoutes from './routes/bookings'
@@ -24,6 +25,11 @@ app.use('/api/users', userRoutes)
 app.use('/api/bookings', bookingRoutes)
 app.use('/api/payments', paymentRoutes)
 
+// Health check
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'ok', service: 'camvo-backend', timestamp: new Date().toISOString() })
+})
+
 // Public config endpoint (used by web app)
 app.get('/api/config/public', (_req, res) => {
   res.json({
@@ -32,18 +38,16 @@ app.get('/api/config/public', (_req, res) => {
   })
 })
 
-// Serve web app static build */
-app.use(express.static(path.join(__dirname, '..', 'web', 'dist')))
+// Serve web app static build (skip gracefully if dist doesn't exist yet)
+const webDist = path.join(__dirname, '..', 'web', 'dist')
+if (fs.existsSync(webDist)) {
+  app.use(express.static(webDist))
 
-// SPA fallback — serve index.html for any non-API route
-app.get('*', (_req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'web', 'dist', 'index.html'))
-})
-
-// Health check
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', service: 'camvo-backend', timestamp: new Date().toISOString() })
-})
+  // SPA fallback — serve index.html for any non-API route
+  app.get('*', (_req, res) => {
+    res.sendFile(path.join(webDist, 'index.html'))
+  })
+}
 
 // Error handler
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
